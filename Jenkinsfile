@@ -106,7 +106,6 @@ pipeline {
                     """
                 }
                 always {
-                    // Clean up Docker images
                     sh 'docker image prune -af'
                 }
             }
