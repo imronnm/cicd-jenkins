@@ -1,31 +1,43 @@
 def secret = 'SSH_KEY'
 def vmapps = 'team1@34.143.177.29'
-def dir    = '~/team1-backend/backend$'
-def branch = 'master'
+def dir    = '~/team1-backend/backend'
+def branch = 'main'
+def tag    = 'latest'
+
+pipeline {
+    agent any
+    stages {
+        stage ("pull") {
            steps {
                sshagent([secret]){
                   sh """ssh -o StrictHostKeyChecking=no ${vmapps} << EOF 
                   cd ${dir}
                   git pull origin ${branch}
-                  echo test
+                  echo "Git Pull Telah Selesai"
                   exit
                   EOF"""
                 }
+            }
+        }
+        stage ("docker build") {
            steps {
                sshagent([secret]){
                   sh """ssh -o StrictHostKeyChecking=no ${vmapps} << EOF 
                   cd ${dir}
-                  docker build ${images}:${tag} .
-                  echo test
+                  docker build -t ${images}:${tag} .
+                  echo "installation dependencies telah selesai"
                   exit
                   EOF"""
                 }
+            }
+        }
+        stage ("run") {
            steps {
                sshagent([secret]){
                   sh """ssh -o StrictHostKeyChecking=no ${vmapps} << EOF 
                   cd ${dir}
                   docker compose up -d
-                  echo test
+                  echo "apllication already run"
                   exit
                   EOF"""
                 }
