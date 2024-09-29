@@ -1,75 +1,74 @@
 pipeline {
     agent any
-    
+
     environment {
-        DISCORD_WEBHOOK = "https://discord.com/api/webhooks/1288738076243263511/tF3j9enIM27eZB_NVfv_0gtXpcGm13PrYgbObobY9jDMdhZk9Z_JNHENTpA_4G9dFwJH"
-        DOCKER_IMAGE = "imronnm/frontendgitlab"
-        TAG = "${env.GIT_BRANCH == 'staging' ? 'staging' : 'latest'}"
+        DISCORD_WEBHOOK = credentials('DISCORD_WEBHOOK')
+        DOCKER_HUB_PASSWD = credentials('DOCKER_HUB_PASSWD')
+        SSH_KEY = credentials('SSH_KEY')
+        SSH_USER = credentials('SSH_USER')
     }
 
     stages {
-        stage('Checkout') {
-            steps {
-                sshagent(['SSH_KEY']) {
-                    sh '''
-                    git clone https://github.com/imronnm/cicd-jenkins.git
-                    cd cicd-jenkins
-                    git checkout ${env.GIT_BRANCH}
-                    '''
-                }
-            }
-        }
-        
-        stage('Build Docker Image') {
+        stage('Build') {
             steps {
                 script {
-                    sh '''
-                    docker build -t ${DOCKER_IMAGE}:${TAG} .
-                    docker push ${DOCKER_IMAGE}:${TAG}
-                    '''
+                    // Login to Docker Hub
+                    sh 'echo "$DOCKER_HUB_PASSWD" | docker login -u "$DOCKER_HUB_USERNAME" --password-stdin || true'
+                    // Build Docker image
+                    sh 'docker build -t imronnm/frontendgitlab:latest .'
+                    // Push Docker image to Docker Hub
+                    sh 'docker push imronnm/frontendgitlab:latest'
                 }
             }
             post {
                 success {
-                    script {
-                        sh '''
+                    // Notify Discord on successful build
+                    sh """
                         wget --spider --header="Content-Type: application/json" \
                         --post-data='{"content": "Build Done✅! Deployment is starting."}' \
                         $DISCORD_WEBHOOK || echo "Failed to send notification"
-                        '''
-                    }
+                    """
                 }
-                cleanup {
+                always {
+                    // Clean up Docker images
                     sh 'docker image prune -af'
                 }
             }
         }
 
         stage('Deploy Staging') {
+            when {
+                branch 'staging'
+            }
             steps {
-                sshagent(['SSH_KEY']) {
-                    sh '''
-                    ssh -o StrictHostKeyChecking=no $SSH_USER '
-                        set -e
-                        cd ~/frontend
-                        docker compose -f docker-compose.yml down || echo "Failed to stop containers"
-                        docker pull ${DOCKER_IMAGE}:${TAG} || echo "Failed to pull image"
-                        docker compose -f docker-compose.yml up -d || echo "Failed to start containers"
-                    '
-                    '''
+                script {
+                    // Create SSH key for authentication
+                    writeFile file: 'id_rsa', text: "${SSH_KEY}"
+                    sh 'chmod 600 id_rsa'
+                    // Deploy to staging
+                    sh """
+                        ssh -i id_rsa -o StrictHostKeyChecking=no $SSH_USER '
+                            set -e
+                            docker compose -f ~/frontend/docker-compose.yml down || echo "Failed to stop containers"
+                            docker pull imronnm/frontendgitlab:latest || echo "Failed to pull image"
+                            docker compose -f ~/frontend/docker-compose.yml up -d || echo "Failed to start containers"
+                        '
+                    """
+                    // Remove SSH key
+                    sh 'rm id_rsa'
                 }
             }
             post {
                 success {
-                    script {
-                        sh '''
+                    // Notify Discord on successful staging deployment
+                    sh """
                         wget --spider --header="Content-Type: application/json" \
                         --post-data='{"content": "🚀 *Deploy Staging Sukses!!🔥"}' \
                         $DISCORD_WEBHOOK || echo "Failed to send notification"
-                        '''
-                    }
+                    """
                 }
-                cleanup {
+                always {
+                    // Clean up Docker images
                     sh 'docker image prune -af'
                 }
             }
@@ -80,29 +79,34 @@ pipeline {
                 branch 'main'
             }
             steps {
-                sshagent(['SSH_KEY']) {
-                    sh '''
-                    ssh -o StrictHostKeyChecking=no $SSH_USER '
-                        set -e
-                        cd ~/frontend
-                        docker compose -f docker-compose.yml down || echo "Failed to stop containers"
-                        docker pull ${DOCKER_IMAGE}:${TAG} || echo "Failed to pull image"
-                        docker compose -f docker-compose.yml up -d || echo "Failed to start containers"
-                    '
-                    '''
+                script {
+                    // Create SSH key for authentication
+                    writeFile file: 'id_rsa', text: "${SSH_KEY}"
+                    sh 'chmod 600 id_rsa'
+                    // Deploy to production
+                    sh """
+                        ssh -i id_rsa -o StrictHostKeyChecking=no $SSH_USER '
+                            set -e
+                            docker compose -f ~/frontend/docker-compose.yml down || echo "Failed to stop containers"
+                            docker pull imronnm/frontendgitlab:latest || echo "Failed to pull image"
+                            docker compose -f ~/frontend/docker-compose.yml up -d || echo "Failed to start containers"
+                        '
+                    """
+                    // Remove SSH key
+                    sh 'rm id_rsa'
                 }
             }
             post {
                 success {
-                    script {
-                        sh '''
+                    // Notify Discord on successful production deployment
+                    sh """
                         wget --spider --header="Content-Type: application/json" \
                         --post-data='{"content": "🚀 *Deploy Production Sukses!!🔥 Aplikasi kita udah live di production! Cek deh! 👀."}' \
                         $DISCORD_WEBHOOK || echo "Failed to send notification"
-                        '''
-                    }
+                    """
                 }
-                cleanup {
+                always {
+                    // Clean up Docker images
                     sh 'docker image prune -af'
                 }
             }
