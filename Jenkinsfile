@@ -8,7 +8,7 @@ pipeline {
     stages {
         stage('Clone Repository') {
             steps {
-                // Clone the repository containing your Dockerfile and application code
+                
                 git 'https://github.com/imronnm/cicd-jenkins.git'
             }
         }
