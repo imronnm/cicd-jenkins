@@ -1,112 +1,58 @@
+def secret = 'SSH_KEY'
+def vmapps = 'team1@34.143.177.29'
+def dir = '~/team1-backend/backend'
+def branch = env.GIT_BRANCH // Mendapatkan nama branch saat ini
+def tag = (branch == 'staging') ? 'staging' : 'latest' // Menentukan tag berdasarkan branch
+def images = 'imronnm/backendjenkins'
+def discordWebhookUrl = 'https://discord.com/api/webhooks/1288738076243263511/tF3j9enIM27eZB_NVfv_0gtXpcGm13PrYgbObobY9jDMdhZk9Z_JNHENTpA_4G9dFwJH'
+
 pipeline {
     agent any
-
-    environment {
-        DISCORD_WEBHOOK = credentials('DISCORD_WEBHOOK')
-        DOCKER_HUB_PASSWD = credentials('DOCKER_HUB_PASSWD')
-        SSH_KEY = credentials('SSH_KEY')
-        SSH_USER = credentials('SSH_USER')
-    }
-
     stages {
-        stage('Build') {
+        stage ("Checkout") {
             steps {
-                script {
-                    // Login to Docker Hub
-                    sh 'echo "$DOCKER_HUB_PASSWD" | docker login -u "$DOCKER_HUB_USERNAME" --password-stdin || true'
-                    // Build Docker image
-                    sh 'docker build -t imronnm/frontendgitlab:latest .'
-                    // Push Docker image to Docker Hub
-                    sh 'docker push imronnm/frontendgitlab:latest'
-                }
-            }
-            post {
-                success {
-                    // Notify Discord on successful build
+                sshagent([secret]) {
                     sh """
-                        wget --spider --header="Content-Type: application/json" \
-                        --post-data='{"content": "Build Done✅! Deployment is starting."}' \
-                        $DISCORD_WEBHOOK || echo "Failed to send notification"
+                    git clone https://github.com/imronnm/cicd-jenkins.git
+                    cd cicd-jenkins
+                    git checkout ${branch}
                     """
-                }
-                always {
-                    // Clean up Docker images
-                    sh 'docker image prune -af'
                 }
             }
         }
-
-        stage('Deploy Staging') {
-            when {
-                branch 'staging'
-            }
+        stage ("Build Docker Image") {
             steps {
-                script {
-                    // Create SSH key for authentication
-                    writeFile file: 'id_rsa', text: "${SSH_KEY}"
-                    sh 'chmod 600 id_rsa'
-                    // Deploy to staging
+                sshagent([secret]) {
                     sh """
-                        ssh -i id_rsa -o StrictHostKeyChecking=no $SSH_USER '
-                            set -e
-                            docker compose -f ~/frontend/docker-compose.yml down || echo "Failed to stop containers"
-                            docker pull imronnm/frontendgitlab:latest || echo "Failed to pull image"
-                            docker compose -f ~/frontend/docker-compose.yml up -d || echo "Failed to start containers"
-                        '
+                    ssh -o StrictHostKeyChecking=no ${vmapps} << EOF
+                    cd ${dir}
+                    docker build -t ${images}:${tag} .
+                    exit
+                    EOF
                     """
-                    // Remove SSH key
-                    sh 'rm id_rsa'
-                }
-            }
-            post {
-                success {
-                    // Notify Discord on successful staging deployment
-                    sh """
-                        wget --spider --header="Content-Type: application/json" \
-                        --post-data='{"content": "🚀 *Deploy Staging Sukses!!🔥"}' \
-                        $DISCORD_WEBHOOK || echo "Failed to send notification"
-                    """
-                }
-                always {
-                    // Clean up Docker images
-                    sh 'docker image prune -af'
                 }
             }
         }
-
-        stage('Deploy Production') {
-            when {
-                branch 'main'
-            }
+        stage ("Deploy") {
             steps {
+                sshagent([secret]) {
+                    sh """
+                    ssh -o StrictHostKeyChecking=no ${vmapps} << EOF
+                    cd ${dir}
+                    docker stop app_name || true
+                    docker rm app_name || true
+                    docker run -d --name app_name -p 80:80 ${images}:${tag}
+                    exit
+                    EOF
+                    """
+                }
+                // Notifikasi Discord
                 script {
-                    // Create SSH key for authentication
-                    writeFile file: 'id_rsa', text: "${SSH_KEY}"
-                    sh 'chmod 600 id_rsa'
-                    // Deploy to production
-                    sh """
-                        ssh -i id_rsa -o StrictHostKeyChecking=no $SSH_USER '
-                            set -e
-                            docker compose -f ~/frontend/docker-compose.yml down || echo "Failed to stop containers"
-                            docker pull imronnm/frontendgitlab:latest || echo "Failed to pull image"
-                            docker compose -f ~/frontend/docker-compose.yml up -d || echo "Failed to start containers"
-                        '
-                    """
-                    // Remove SSH key
-                    sh 'rm id_rsa'
-                }
-            }
-            post {
-                success {
-                    // Notify Discord on successful production deployment
-                    sh """
-                        wget --spider --header="Content-Type: application/json" \
-                        --post-data='{"content": "🚀 *Deploy Production Sukses!!🔥 Aplikasi kita udah live di production! Cek deh! 👀."}' \
-                        $DISCORD_WEBHOOK || echo "Failed to send notification"
-                    """
-                }
-                always {
-                    sh 'docker image prune -af'
+                    def message = "Deployment to ${branch} was successful! 🚀"
+                    def response = sh(script: "curl -H 'Content-Type: application/json' -X POST -d '{\"content\": \"${message}\"}' ${discordWebhookUrl}", returnStatus: true)
+                    if (response != 0) {
+                        error "Failed to send notification to Discord."
+                    }
                 }
             }
         }
