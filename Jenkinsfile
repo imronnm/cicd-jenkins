@@ -14,7 +14,7 @@ pipeline {
         }
         stage('Build Docker Image') {
             steps {
-                // Build the Docker image
+                
                 sh 'docker build -t imronnm/backendjenkins:staging .'
             }
         }
