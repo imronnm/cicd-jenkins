@@ -3,7 +3,7 @@ def vmapps = 'team1@34.143.177.29' // Your VM SSH user and address
 def dir = '/home/team1/frontend' // Your application directory
 def branch = 'main' // Branch for deployment
 def imageName = 'imronnm/backendjenkins' // Your Docker image name
-def tag = 'latest' // Your Docker image tag
+def tag = 'latest' 
 
 pipeline {
     agent any
