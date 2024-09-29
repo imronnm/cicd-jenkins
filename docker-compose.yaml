@@ -1,0 +1,42 @@
+services:
+   backend-1:
+      container_name: server-backend1-team1
+      build:
+         context: ./backend
+         dockerfile: Dockerfile
+      image: team1/dumbflix/backend:production
+      restart: always
+      networks:
+         - team1
+      environment:
+         DB_HOST: 34.87.167.172 # IP Address VM Database contoh: 192.168.1.10
+         DB_USERNAME: team1
+         DB_PASSWORD: team1
+         DB_NAME: wayshub
+     # env_file:
+     #    - .env
+     # depends_on:
+     #    - db
+      ports:
+         - "5000:5000"
+
+   backend-2:
+      container_name: server-backend2-team1
+      build:
+         context: ./backend
+         dockerfile: Dockerfile
+      image: team1/dumbflix/backend:production
+      restart: always
+      networks:
+         - team1
+      environment:
+         DB_HOST: 34.87.167.172 # IP Address VM Database contoh: 192.168.1.10
+         DB_USER: team1
+         DB_PASSWORD: team1
+         DB_NAME: wayshub
+      ports:
+         - "5001:5000"
+
+networks:
+   team1:
+      driver: bridge
