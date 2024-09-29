@@ -4,7 +4,7 @@ services:
       build:
          context: ./backend
          dockerfile: Dockerfile
-      image: team1/dumbflix/backend:production
+      image: backendjenkins:latest
       restart: always
       networks:
          - team1
@@ -25,7 +25,7 @@ services:
       build:
          context: ./backend
          dockerfile: Dockerfile
-      image: team1/dumbflix/backend:production
+      image: backendjenkins:latest
       restart: always
       networks:
          - team1
