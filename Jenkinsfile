@@ -3,43 +3,63 @@ def vmapps = 'team1@34.143.177.29'
 def dir    = '~/team1-backend/backend'
 def branch = 'main'
 def tag    = 'latest'
+def images = 'imronnm/backendjenkins'
 
 pipeline {
     agent any
     stages {
-        stage ("pull") {
-           steps {
-               sshagent([secret]){
-                  sh """ssh -o StrictHostKeyChecking=no ${vmapps} << EOF 
-                  cd ${dir}
-                  git pull origin ${branch}
-                  echo "Git Pull Telah Selesai"
-                  exit
-                  EOF"""
+        stage ("Pull from Git") {
+            steps {
+                sshagent([secret]) {
+                    sh """
+                    ssh -o StrictHostKeyChecking=no ${vmapps} << EOF
+                    cd ${dir}
+                    git checkout ${branch}
+                    git pull origin ${branch}
+                    EOF
+                    """
                 }
             }
         }
-        stage ("docker build") {
-           steps {
-               sshagent([secret]){
-                  sh """ssh -o StrictHostKeyChecking=no ${vmapps} << EOF 
-                  cd ${dir}
-                  docker build -t ${images}:${tag} .
-                  echo "installation dependencies telah selesai"
-                  exit
-                  EOF"""
+        stage ("Build Docker Image") {
+            steps {
+                sshagent([secret]) {
+                    sh """
+                    ssh -o StrictHostKeyChecking=no ${vmapps} << EOF
+                    cd ${dir}
+                    docker build -t ${images}:${tag} .
+                    EOF
+                    """
                 }
             }
         }
-        stage ("run") {
-           steps {
-               sshagent([secret]){
-                  sh """ssh -o StrictHostKeyChecking=no ${vmapps} << EOF 
-                  cd ${dir}
-                  docker compose up -d
-                  echo "apllication already run"
-                  exit
-                  EOF"""
+        stage ("Run Docker Container") {
+            steps {
+                sshagent([secret]) {
+                    sh """
+                    ssh -o StrictHostKeyChecking=no ${vmapps} << EOF
+                    cd ${dir}
+                    # Stop any existing container if running
+                    if [ \$(docker ps -q -f name=${images}) ]; then
+                        docker stop ${images}
+                        docker rm ${images}
+                    fi
+                    # Run new container
+                    docker run -d --name ${images} -p 5000:5000 ${images}:${tag}
+                    EOF
+                    """
+                }
+            }
+        }
+        stage ("Clean Up") {
+            steps {
+                sshagent([secret]) {
+                    sh """
+                    ssh -o StrictHostKeyChecking=no ${vmapps} << EOF
+                    # Optionally remove old images
+                    docker image prune -f
+                    EOF
+                    """
                 }
             }
         }
